@@ -12,7 +12,7 @@ import logging
 import brukva
 from sse import Sse
 
-
+from pprint import pprint
 logger = logging.getLogger()
 
 
@@ -20,9 +20,9 @@ CHANNEL = 'sse'
 
 
 SSE_HEADERS = (
-    ('Content-Type','text/event-stream; charset=utf-8'),
-    ('Cache-Control','no-cache'),
-    ('Connection','keep-alive'),
+    ('Content-Type', 'text/event-stream; charset=utf-8'),
+    ('Cache-Control', 'no-cache'),
+    ('Connection', 'keep-alive'),
     ('Access-Control-Allow-Origin', '*'),
 )
 
@@ -59,8 +59,8 @@ class SSEHandler(tornado.web.RequestHandler):
 
     def set_id(self):
         self.connection_id = hashlib.md5('%s-%s-%s' % (
-            self.request.connection.address[0],
-            self.request.connection.address[1],
+            self.request.connection.context.address[0],
+            self.request.connection.context.address[1],
             time.time(),
         )).hexdigest()
 
@@ -92,8 +92,6 @@ class SSEHandler(tornado.web.RequestHandler):
     @tornado.web.asynchronous
     def get(self, *args, **kwargs):
         # Sending the standard headers: open event
-        headers = self._generate_headers()
-        self.write(headers)
         self.flush()
 
         self.set_id()
@@ -108,7 +106,8 @@ class SSEHandler(tornado.web.RequestHandler):
         """ Invoked for a new connection opened. """
         cls = self.__class__
 
-        logger.info('Incoming connection %s to channels "%s"' % (self.connection_id, ', '.join(self.channels)))
+        logger.info('Incoming connection %s to channels "%s"' %
+                    (self.connection_id, ', '.join(self.channels)))
         cls._connections[self.connection_id] = self
         self.set_source()
 
@@ -123,15 +122,16 @@ class SSEHandler(tornado.web.RequestHandler):
 
         event_id = self.request.headers.get('Last-Event-ID', None)
         if event_id:
-            logging.info('Client %s last event ID: %s' % (self.connection_id, event_id))
+            logging.info('Client %s last event ID: %s' %
+                         (self.connection_id, event_id))
             i = 0
             for i, msg in enumerate(cls._cache):
-                if msg['id'] == event_id: break
+                if msg['id'] == event_id:
+                    break
 
             for msg in cls._cache[i:]:
                 if msg['channel'] in self.channels:
                     self.on_message(msg['body'])
-
 
     def on_close(self):
         """ Invoked when the connection for this instance is closed. """
@@ -163,7 +163,7 @@ class SSEHandler(tornado.web.RequestHandler):
         sse.set_event_id(id)
         sse.add_message(event, data)
 
-        message =  ''.join(sse)
+        message = ''.join(sse)
         cls._cache.append({
             'id': id,
             'channel': msg.channel,
@@ -173,7 +173,8 @@ class SSEHandler(tornado.web.RequestHandler):
             cls._cache = cls._cache[-cls._cache_size:]
 
         clients = cls._channels.get(msg.channel, [])
-        logger.info('Sending %s "%s" to channel %s for %s clients' % (event, data, msg.channel, len(clients)))
+        logger.info('Sending %s "%s" to channel %s for %s clients' %
+                    (event, data, msg.channel, len(clients)))
         for client_id in clients:
             client = cls._connections[client_id]
             client.on_message(message)
@@ -184,6 +185,7 @@ class SSEHandler(tornado.web.RequestHandler):
 
 
 class DjangoSSEHandler(SSEHandler):
+
     @tornado.web.asynchronous
     def get_channels(self):
         user = self.get_current_user()
@@ -206,7 +208,8 @@ class DjangoSSEHandler(SSEHandler):
         from django.contrib.auth import get_user
 
         # get_user needs a django request object, but only looks at the session
-        class Dummy: pass
+        class Dummy:
+            pass
 
         django_request = Dummy()
         django_request.session = self.get_django_session()
